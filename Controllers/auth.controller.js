@@ -1,5 +1,5 @@
 import User from '../model/user.schema'
-
+import crypto from 'crypto'
 import asyncHandler from '../services/asyncHandler'
 import CustomError from '../utils/customError'
 import mailHelper from '../utils/mailhelper'
@@ -77,7 +77,7 @@ export const login  = asyncHandler(async (req,res)=>{
     }
 
 
-    const user = User.findOne({email}).select("+password")
+    const user = await User.findOne({email}).select("+password")
 
     if (!user){
         throw new CustomError('Invalid credentials',400)
@@ -169,6 +169,57 @@ export const forgotPassword = asyncHandler(async(req,res)=>{
         throw new CustomError(err.message || 'Email sent failure',500)
     }
 })
+/*
+@RESET_PASSWORD
+@route http://localhost:4000/api/auth/password/forgot/reset/:resetPasswordToken
+@description:user will be able to reset password based on url token
+@parameters: tokenfrom url ,password and confirm password
+@return:user object
 
+
+*/
+
+
+export const resetPassword = asyncHandler(async (req,res)=>{
+    const {token:resetToken} = req.params 
+    const {password,confirmPassword} = req.body
+    
+    const resetPassswordToken  = crypto.createHash('sha256').update(resetToken).digest('hex') 
+
+
+    const user = await User.findOne({
+        forgotPasswordToken : resetPassswordToken,
+        //we use $gt:Date.now() . it indicates that date should be greater than now
+        forgotPasswordExpiry:{$gt:Date.now()}
+    })
+
+    if(!user){
+        throw new CustomError('password token is invalid or expired',400)
+    }
+
+    if(password !== confirmPassword){
+        throw new CustomError('password and conform password did not match',400)
+    }
+
+    user.password = password
+    user.forgotPasswordToken = undefined
+    user.forgotPasswordExpiry = undefined
+
+    await user.save()
+
+    // create token and send to user
+
+    const token = user.getJwtToken()
+    user.password = undefined
+
+    // helper method for cookie can be added
+    res.cookie('token',token,cookieOptions)
+    res.status(200).json({
+        success:true,
+        user 
+})
+})
+
+// TODO:create a controller for change password
 
 
