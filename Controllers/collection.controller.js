@@ -117,3 +117,4 @@ export const getAllCollections = asyncHandler(async(req,res) => {
         collections
     })
 })
+
